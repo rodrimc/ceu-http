@@ -1,0 +1,12 @@
+#include "watson-services.ceu"
+
+var char[] api_key = [] .. "<api_key>"; 
+var char[] image_url = [] .. "https://raw.githubusercontent.com/watson-developer-cloud/doc-tutorial-downloads/master/visual-recognition/fruitbowl.jpg"; 
+
+do WatsonVisualRecognition with 
+  this.api_key   = &api_key;
+  this.image_url = &image_url;
+end;
+
+
+escape 0;

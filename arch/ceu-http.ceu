@@ -6,26 +6,26 @@ native @pure
         _SOUP_SESSION_FEATURE(); 
 
 native @plain
-        _SOUP_MESSAGE_NO_REDIRECT,
-        _SOUP_LOGGER_LOG_BODY;
+        _SOUP_LOGGER_LOG_BODY,
+        _SOUP_MESSAGE_NO_REDIRECT;
 
 native @nohold
-        _soup_session_add_feature(),
+        _g_free(),
+        _g_main_context_iteration(),
+        _g_main_loop_get_context(),
+        _g_main_loop_quit(),
         _g_main_loop_unref(),
+        _g_object_unref(),
+        _printf(),
         _soup_message_new(),
         _soup_message_new_from_uri(),
         _soup_message_set_flags(),
+        _soup_session_add_feature(),
         _soup_session_queue_message(),
-        _printf(),
-        _g_main_loop_quit(),
-        _g_main_loop_get_context(),
-        _g_main_context_iteration(),
-        _soup_uri_new (),
         _soup_uri_free (), 
+        _soup_uri_new (),
         _soup_uri_set_query(),
-        _soup_uri_to_string(),
-        _g_free(),
-        _g_object_unref();
+        _soup_uri_to_string();
 
 native/pre do
 	##include <glib.h>

@@ -1,0 +1,29 @@
+#include "ceu-http.ceu"
+
+
+class WatsonVisualRecognition with 
+  var char[]& api_key;
+  var char[]& image_url;
+do
+  var char[] method = [] .. "GET";
+  var char[] uri = [] .. "https://gateway-a.watsonplatform.net/visual-recognition/api/v3/classify";
+  var int status = 0;
+  var char[] response;
+
+  pool QueryParams[] query = 
+    new QueryParams.CONS ("api_key", (_char&&)&&api_key,
+          QueryParams.CONS ("version", "2016-05-19", 
+            QueryParams.CONS ("url", (_char&&)&&image_url, 
+              QueryParams.NIL() ) ) );
+
+  do HTTPClient with 
+    this.method   = &method;
+    this.uri      = &uri;
+    this.query    = &query;
+    this.redirect = true;
+    this.status   = &status;
+    this.response = &response;
+  end;
+
+  _printf ("%s\n", &&response[0]);
+end
