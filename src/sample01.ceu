@@ -1,7 +1,8 @@
 #include "ceu-http.ceu"
 
 var char [] method = [] .. "GET";
-var char [] uri = [] .."http://www.posttestserver.com/post.php";
+var char [] uri = [] .. "http://www.posttestserver.com/post.php";
+var int status = 0;
 var char [] response;
 
 pool QueryParams[] query = 
@@ -10,14 +11,17 @@ pool QueryParams[] query =
           QueryParams.CONS ("key3", "value3", 
             QueryParams.NIL() ) ) );
 
+
 do HTTPClient with 
   this.method   = &method;
   this.uri      = &uri;
   this.query    = &query;
   this.redirect = true;
+  this.status   = &status;
   this.response = &response;
 end;
 
+_printf ("%d\n", status);
 _printf ("%s\n", &&response[0]);
 
 _printf ("all done\n");

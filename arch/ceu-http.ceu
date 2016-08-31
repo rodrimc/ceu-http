@@ -20,8 +20,8 @@ native @nohold
         _g_main_loop_quit(),
         _g_main_loop_get_context(),
         _g_main_context_iteration(),
-        _soup_uri_new (),   
-        _soup_uri_free (),   
+        _soup_uri_new (),
+        _soup_uri_free (), 
         _soup_uri_set_query(),
         _soup_uri_to_string(),
         _g_free(),
@@ -61,6 +61,7 @@ class HTTPClient with
   var char[]& method;
   var bool redirect;
   pool QueryParams[]& query;
+  var int& status;
   var char[]& response;
 do
   var _SoupSession &?session;
@@ -134,6 +135,8 @@ do
                                       until (response_to == my_req_id);
   var _char&& charptr = &&msg!.response_body:data[0];
   response = [] .. (_char&&)charptr;
+
+  status = msg!.status_code;
 end
 
 
