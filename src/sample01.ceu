@@ -1,9 +1,23 @@
 #include "ceu-http.ceu"
 
 var char [] method = [] .. "GET";
-var char [] uri = [] .. "http://www.posttestserver.com/post.php";
+var char [] uri = [] .."http://www.posttestserver.com/post.php";
 var char [] response;
-do HTTPClient.do_request(&method, &uri, true, &response);
+
+pool QueryParams[] query = 
+  new QueryParams.CONS ("key1", "value1",
+        QueryParams.CONS ("key2", "value2", 
+          QueryParams.CONS ("key3", "value3", 
+            QueryParams.NIL() ) ) );
+
+do HTTPClient with 
+  this.method   = &method;
+  this.uri      = &uri;
+  this.query    = &query;
+  this.redirect = true;
+  this.response = &response;
+end;
+
 _printf ("%s\n", &&response[0]);
 
 _printf ("all done\n");

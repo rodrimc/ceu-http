@@ -13,12 +13,18 @@ native @nohold
         _soup_session_add_feature(),
         _g_main_loop_unref(),
         _soup_message_new(),
+        _soup_message_new_from_uri(),
         _soup_message_set_flags(),
         _soup_session_queue_message(),
         _printf(),
         _g_main_loop_quit(),
         _g_main_loop_get_context(),
         _g_main_context_iteration(),
+        _soup_uri_new (),   
+        _soup_uri_free (),   
+        _soup_uri_set_query(),
+        _soup_uri_to_string(),
+        _g_free(),
         _g_object_unref();
 
 native/pre do
@@ -29,6 +35,17 @@ native/pre do
   ##include <libsoup/soup.h> 
 
   static int req_id = 0;
+  typedef char * charptr;
+end
+
+data QueryParams with
+  tag NIL;
+or
+  tag CONS with
+    var _char[128] key;
+    var _char[128] value;
+    var QueryParams next;
+  end
 end
 
 native do
@@ -40,22 +57,12 @@ native do
 end
 
 class HTTPClient with 
-  function (char[]& method, char[]& uri, bool redirect, char[]& response) => 
-                                                  HTTPClient do_request;
-
   var char[]& uri;
   var char[]& method;
   var bool redirect;
+  pool QueryParams[]& query;
   var char[]& response;
 do
-  function (char[]& method, char[]& uri, bool redirect, char[]& response) => 
-                                                  HTTPClient do_request do
-    this.uri      = &uri;
-    this.method   = &method;
-    this.redirect = redirect;
-    this.response = &response;
-  end
-
   var _SoupSession &?session;
     finalize 
       session = &_soup_session_new ();
@@ -75,10 +82,37 @@ do
                              _SOUP_SESSION_FEATURE (&&logger!));
 #endif
 
+  var char[] query_string = [] .. "";
+
+  traverse param in &&this.query do
+    if param:CONS then 
+      query_string = [] .. query_string .. "&".. (_char&&)param:CONS.key 
+                                .. "=" .. (_char&&)param:CONS.value; 
+      traverse &&param:CONS.next;
+    end
+  end
+
+  var _SoupURI &?soupURI;
+    finalize
+      soupURI = &_soup_uri_new (&&uri[0]);
+    with
+      _soup_uri_free (&&soupURI!);
+    end
+
+  if ($query_string > 0) then
+    _soup_uri_set_query (&&soupURI!, &&query_string[0]);
+
+    var _charptr&? uristr;
+      finalize 
+        uristr = &_soup_uri_to_string (&&soupURI!, false); 
+      with
+        _g_free (&&uristr!);
+      end
+  end
+
   var _SoupMessage &?msg;
     finalize
-      msg = &_soup_message_new ((_char&&)&&method,
-                                (_char&&)&&uri);
+      msg = &_soup_message_new_from_uri ((_char&&)&&method, &&soupURI!);
     with
     end
 	
