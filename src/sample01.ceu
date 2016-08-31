@@ -3,7 +3,7 @@
 var char [] method = [] .. "GET";
 var char [] uri = [] .. "http://www.posttestserver.com/post.php";
 var char [] response;
-do HTTPClient.do_request(&method, &uri, &response);
+do HTTPClient.do_request(&method, &uri, true, &response);
 _printf ("%s\n", &&response[0]);
 
 _printf ("all done\n");

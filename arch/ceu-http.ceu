@@ -40,17 +40,19 @@ native do
 end
 
 class HTTPClient with 
-  function (char[]& method, char[]& uri, char[]& response) => 
+  function (char[]& method, char[]& uri, bool redirect, char[]& response) => 
                                                   HTTPClient do_request;
 
   var char[]& uri;
   var char[]& method;
+  var bool redirect;
   var char[]& response;
 do
-  function (char[]& method, char[]& uri, char[]& response) => 
+  function (char[]& method, char[]& uri, bool redirect, char[]& response) => 
                                                   HTTPClient do_request do
     this.uri      = &uri;
     this.method   = &method;
+    this.redirect = redirect;
     this.response = &response;
   end
 
@@ -80,7 +82,9 @@ do
     with
     end
 	
-  _soup_message_set_flags (&&msg!, _SOUP_MESSAGE_NO_REDIRECT);
+  if (redirect == false) then
+    _soup_message_set_flags (&&msg!, _SOUP_MESSAGE_NO_REDIRECT);
+  end
 
   _g_object_ref (&&msg!) 
     finalize with
