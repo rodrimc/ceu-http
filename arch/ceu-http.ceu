@@ -1,7 +1,7 @@
 #ifndef _CEU_HTTP
 #define _CEU_HTTP
 
-input void REQUEST_FINISHED;
+input (int) REQUEST_FINISHED;
 native @pure
         _SOUP_SESSION_FEATURE(); 
 
@@ -16,6 +16,9 @@ native @nohold
         _soup_message_set_flags(),
         _soup_session_queue_message(),
         _printf(),
+        _g_main_loop_quit(),
+        _g_main_loop_get_context(),
+        _g_main_context_iteration(),
         _g_object_unref();
 
 native/pre do
@@ -23,18 +26,18 @@ native/pre do
 	##include <stdio.h>
 	##include <stdlib.h>
 
-  ##include <libsoup/soup.h>
+  ##include <libsoup/soup.h> 
+
+  static int req_id = 0;
 end
 
 native do
   void
-  finished (SoupSession *session, SoupMessage *msg, gpointer loop)
+  finished (SoupSession *session, SoupMessage *msg, gpointer id)
   {
-    g_main_loop_quit (loop);
-    ceu_sys_go(&CEU_APP, CEU_IN_REQUEST_FINISHED, NULL);
+    ceu_sys_go(&CEU_APP, CEU_IN_REQUEST_FINISHED, id);
   }
 end
-
 
 class HTTPClient with 
   function (char[]& method, char[]& uri, char[]& response) => 
@@ -57,30 +60,18 @@ do
     with
       _g_object_unref (&&session!);
     end
-  
-  /* var _SoupLogger &?logger; */
-  /*   finalize */
-  /*     logger = &_soup_logger_new (_SOUP_LOGGER_LOG_BODY, -1); */
-  /*   with */
-  /*     _g_object_unref (&&logger!); */
-  /*   end */
 
-  /* _soup_session_add_feature (&&session!, */ 
-  /*                            _SOUP_SESSION_FEATURE (&&logger!)); */
-  
-  var _GMainLoop &?main_loop;
+#ifdef LOGGER
+  var _SoupLogger &?logger;
     finalize
-      main_loop = &_g_main_loop_new (null, true);
+      logger = &_soup_logger_new (_SOUP_LOGGER_LOG_BODY, -1);
     with
-      _g_main_loop_unref (&&main_loop!);
+      _g_object_unref (&&logger!);
     end
 
-  spawn do 
-    async/thread (main_loop) do
-      _g_main_loop_run (&&main_loop!);
-    end
-    await FOREVER;
-  end
+  _soup_session_add_feature (&&session!, 
+                             _SOUP_SESSION_FEATURE (&&logger!));
+#endif
 
   var _SoupMessage &?msg;
     finalize
@@ -96,30 +87,47 @@ do
       _g_object_unref (&&msg!);
     end;
 
-  _soup_session_queue_message (&&session!, &&msg!, _finished, 
-                               &&main_loop!);
+  var int my_req_id = _req_id;
+  _req_id = _req_id + 1;
 
-  await REQUEST_FINISHED;
-  /* var char&& r = &&msg!.response_body:data[0]; */
-  /* response = [] .. (char[])(&&r); */
-  _printf ("%s\n", &&msg!.response_body:data[0]); 
+  _soup_session_queue_message (&&session!, &&msg!, _finished, &&my_req_id);
 
+  var int response_to = await REQUEST_FINISHED 
+                                      until (response_to == my_req_id);
+  var _char&& charptr = &&msg!.response_body:data[0];
+  response = [] .. (_char&&)charptr;
 end
 
 
-/***********    async clock block   *************/
+/***********    async block   *************/
 spawn do
-  async do 
+  var _GMainLoop &?main_loop;
+    finalize
+      main_loop = &_g_main_loop_new (null, true);
+    with
+      _g_main_loop_quit (&&main_loop!);
+      _g_main_loop_unref (&&main_loop!);
+    end
+
+  var _GMainContext &?context;
+    finalize
+      context = &_g_main_loop_get_context (&&main_loop!);
+    with
+    end
+
+  async (context) do 
     var s64 base, current, tmp;
     base = _g_get_monotonic_time ();
     current = 0;
     tmp = 0;
+
     loop do
       current = _g_get_monotonic_time ();
       tmp = current - base;
       
       base = current;
       emit (tmp)us;
+      _g_main_context_iteration (&&context!, false);
     end
   end
   await FOREVER;

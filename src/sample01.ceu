@@ -1,10 +1,11 @@
 #include "ceu-http.ceu"
 
-_printf ("begin\n");
-var char [] method = [] .. "POST";
+var char [] method = [] .. "GET";
 var char [] uri = [] .. "http://www.posttestserver.com/post.php";
 var char [] response;
 do HTTPClient.do_request(&method, &uri, &response);
-_printf ("end\n");
+_printf ("%s\n", &&response[0]);
+
+_printf ("all done\n");
 
 escape 0;
