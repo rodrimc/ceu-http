@@ -1,9 +1,17 @@
 #include "ceu-http.ceu"
 
+[[json = require ('json')]]
+
+data Class with
+  var _char[128] image_class;
+  var float score;
+  var _char[128] hierarchy;
+end
 
 class WatsonVisualRecognition with 
   var char[]& api_key;
   var char[]& image_url;
+  var Class[]& classes;
 do
   var char[] method = [] .. "GET";
   var char[] uri = [] .. "https://gateway-a.watsonplatform.net/visual-recognition/api/v3/classify";
@@ -25,5 +33,31 @@ do
     this.response = &response;
   end;
 
-  _printf ("%s\n", &&response[0]);
+  [[
+      resp = @response
+      decoded = json.decode (resp)
+
+     images_processed = decoded.images_processed
+     images = decoded.images
+     classes = {}
+     for i=1, #images do
+       classifiers = decoded.images[i].classifiers
+       for j=1, #classifiers do
+         for k=1, #classifiers[j].classes do
+           table.insert (classes, classifiers[j].classes[k])
+         end
+       end
+     end
+  ]]
+  
+  var int images_processed = [[ #images ]];
+  var int num_classes = [[ #classes]];
+
+  loop i in num_classes  do
+    var char[] img_class = [[ classes[@i + 1].class]];
+    var char[] hierarchy = [[ classes[@i + 1].type_hierarchy or ""]];
+    var float score = [[tonumber (classes[@i + 1].score) ]];
+    var Class c = Class ((_char&&)&&img_class, score, (_char&&)&&hierarchy);
+    classes = [] .. classes .. [c];
+  end
 end

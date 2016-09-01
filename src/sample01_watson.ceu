@@ -3,10 +3,17 @@
 var char[] api_key = [] .. "<api_key>"; 
 var char[] image_url = [] .. "https://raw.githubusercontent.com/watson-developer-cloud/doc-tutorial-downloads/master/visual-recognition/fruitbowl.jpg"; 
 
+var Class[] classes;
+
 do WatsonVisualRecognition with 
   this.api_key   = &api_key;
   this.image_url = &image_url;
+  this.classes   = &classes;
 end;
 
+loop i in $classes do
+  _printf ("%s: %f (%s)\n", classes[i].image_class, classes[i].score, 
+                            classes[i].hierarchy);
+end
 
 escape 0;
