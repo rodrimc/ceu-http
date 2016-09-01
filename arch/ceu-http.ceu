@@ -2,8 +2,11 @@
 #define _CEU_HTTP
 
 input (int) REQUEST_FINISHED;
+input (int, _gucharptr, _gsize) LOAD_BUFFER_FINISHED;
+
 native @pure
-        _SOUP_SESSION_FEATURE(); 
+        _SOUP_SESSION_FEATURE(), 
+        _UNSAFE();
 
 native @plain
         _SOUP_LOGGER_LOG_BODY,
@@ -16,10 +19,18 @@ native @nohold
         _g_main_loop_quit(),
         _g_main_loop_unref(),
         _g_object_unref(),
+        _g_thread_new (),
+        _g_thread_unref(),
+        _load_buffer_data_new(),
         _printf(),
+        _soup_buffer_free(),
+        _soup_form_request_new_from_multipart(),
         _soup_message_new(),
         _soup_message_new_from_uri(),
         _soup_message_set_flags(),
+        _soup_multipart_append_form_file(),
+        _soup_multipart_free(),
+        _soup_multipart_new(),
         _soup_session_add_feature(),
         _soup_session_queue_message(),
         _soup_uri_free (), 
@@ -36,6 +47,15 @@ native/pre do
 
   static int req_id = 0;
   typedef char * charptr;
+  typedef guchar * gucharptr;
+
+  #define UNSAFE(X) X
+
+  typedef struct _load_buffer_data_t 
+  {
+    int id;
+    const char *filepath;
+  } load_buffer_data_t;
 end
 
 data QueryParams with
@@ -54,16 +74,70 @@ native do
   {
     ceu_sys_go(&CEU_APP, CEU_IN_REQUEST_FINISHED, id);
   }
+
+  typedef struct _id_buffer_tuple_t
+  {
+    int id;
+    guchar *buffer;
+    gsize length;
+  } id_buffer_tuple_t;
+
+  load_buffer_data_t *load_buffer_data_new (int id, const char *filepath)
+  {
+    load_buffer_data_t *data = g_malloc (sizeof (load_buffer_data_t));
+    data->id = id;
+    data->filepath = filepath;
+    return data;
+  }
+
+  gpointer load_buffer (gpointer ptr)
+  {
+    FILE *file = NULL;
+    guchar *buffer;
+    gsize length;
+    load_buffer_data_t *data;
+    id_buffer_tuple_t tuple;
+
+    data = (load_buffer_data_t *) ptr;
+
+    file = fopen (data->filepath, "rb");
+    if (!file)
+    {
+      g_printerr ("Could not open %s\n.", data->filepath);
+      return NULL;
+    }
+
+
+    fseek (file, 0L, SEEK_END); 
+    length = ftell (file);
+    rewind (file);
+
+    buffer = g_malloc (length + 1); 
+    fread (buffer, sizeof(guchar), length, file);
+    fclose (file);
+
+    tuple.id = data->id;
+    tuple.buffer = buffer;
+    tuple.length = length;
+
+    ceu_sys_go(&CEU_APP, CEU_IN_LOAD_BUFFER_FINISHED, &tuple);
+
+    return NULL;
+  }
 end
 
 class HTTPClient with 
   var char[]& uri;
   var char[]& method;
-  var bool redirect;
+  var char[]& mp_data;
   pool QueryParams[]& query;
+  var bool redirect;
   var int& status;
   var char[]& response;
 do
+  var int my_req_id = _req_id;
+  _req_id = _req_id + 1;
+
   var _SoupSession &?session;
     finalize 
       session = &_soup_session_new ();
@@ -102,21 +176,75 @@ do
 
   if ($query_string > 0) then
     _soup_uri_set_query (&&soupURI!, &&query_string[0]);
-
-    var _charptr&? uristr;
-      finalize 
-        uristr = &_soup_uri_to_string (&&soupURI!, false); 
-      with
-        _g_free (&&uristr!);
-      end
   end
 
+  var _charptr&? uristr;
+    finalize 
+      uristr = &_soup_uri_to_string (&&soupURI!, false); 
+    with
+      _g_free (&&uristr!);
+    end
+
   var _SoupMessage &?msg;
+  if ($mp_data > 0) then
+    /* par/or do */ 
+    /*   async/thread (my_req_id, mp_data) do */ 
+    /*     _load_buffer (my_req_id, mp_data!); */
+    /*   end */
+    /* with */
+    /*   var int id; */
+    /*   var _gucharptr buff; */
+    /*   (id, buff) = await LOAD_BUFFER_FINISHED until (id == my_req_id); */ 
+    /* end */
+    var _load_buffer_data_t&? arg;
+      finalize
+        arg = &_load_buffer_data_new (my_req_id, &&mp_data[0]);
+      with
+        _g_free (&&arg!);
+      end
+
+    var _GThread&? worker;
+    finalize
+      worker = &_g_thread_new (null, _load_buffer, &&arg!);
+    with
+      _g_thread_unref (&&worker!);
+    end
+    
+    var int id;
+    var _gucharptr buff;
+    var _gsize length;
+    (id, buff, length) = await LOAD_BUFFER_FINISHED 
+                                                until (id == my_req_id); 
+
+    var _SoupBuffer &?soup_buffer;
+      finalize
+        soup_buffer = &_soup_buffer_new_take (buff, length) 
+                          finalize with
+                          end;
+      with
+        _soup_buffer_free (&&soup_buffer!);
+      end
+
+    var _SoupMultipart &?multipart;
+      finalize
+        multipart = &_soup_multipart_new ("multipart/form-data");
+      with
+        _soup_multipart_free (&&multipart!);
+      end
+
+    _soup_multipart_append_form_file (&&multipart!, "images_data", 
+          &&mp_data[0], "image/jpg", &&soup_buffer!);
+
+    finalize
+      msg = &_soup_form_request_new_from_multipart (&&uristr!, &&multipart!);
+    with
+    end
+  else
     finalize
       msg = &_soup_message_new_from_uri ((_char&&)&&method, &&soupURI!);
     with
     end
-	
+  end
   if (redirect == false) then
     _soup_message_set_flags (&&msg!, _SOUP_MESSAGE_NO_REDIRECT);
   end
@@ -125,9 +253,6 @@ do
     finalize with
       _g_object_unref (&&msg!);
     end;
-
-  var int my_req_id = _req_id;
-  _req_id = _req_id + 1;
 
   _soup_session_queue_message (&&session!, &&msg!, _finished, &&my_req_id);
 
@@ -138,7 +263,6 @@ do
 
   status = msg!.status_code;
 end
-
 
 /***********    async block   *************/
 spawn do
