@@ -1,14 +1,21 @@
+/*
+chico@samsung:/data/ceu/ceu-http/arch$ ls -l
+lrwxrwxrwx ... 39 Set  1 16:42 ceu_main.c -> <CEU>/arch/pthread/ceu_main.c
+lrwxrwxrwx ... 29 Set  1 16:43 up -> <CEU>/arch/pthread/
+*/
+
 #ifndef _CEU_HTTP
 #define _CEU_HTTP
 
 input (int) REQUEST_FINISHED;
-input (int, _gucharptr, _gsize) LOAD_BUFFER_FINISHED;
+//input (int, _gucharptr, _gsize) LOAD_BUFFER_FINISHED;
 
 native @pure
         _SOUP_SESSION_FEATURE(), 
         _UNSAFE();
 
 native @plain
+        _id_buffer_tuple_t,
         _SOUP_LOGGER_LOG_BODY,
         _SOUP_MESSAGE_NO_REDIRECT;
 
@@ -56,6 +63,14 @@ native/pre do
     int id;
     const char *filepath;
   } load_buffer_data_t;
+
+  typedef struct _id_buffer_tuple_t
+  {
+    int id;
+    guchar *buffer;
+    gsize length;
+  } id_buffer_tuple_t;
+
 end
 
 data QueryParams with
@@ -75,13 +90,6 @@ native do
     ceu_sys_go(&CEU_APP, CEU_IN_REQUEST_FINISHED, id);
   }
 
-  typedef struct _id_buffer_tuple_t
-  {
-    int id;
-    guchar *buffer;
-    gsize length;
-  } id_buffer_tuple_t;
-
   load_buffer_data_t *load_buffer_data_new (int id, const char *filepath)
   {
     load_buffer_data_t *data = g_malloc (sizeof (load_buffer_data_t));
@@ -90,7 +98,7 @@ native do
     return data;
   }
 
-  gpointer load_buffer (gpointer ptr)
+  id_buffer_tuple_t load_buffer (gpointer ptr)
   {
     FILE *file = NULL;
     guchar *buffer;
@@ -104,7 +112,8 @@ native do
     if (!file)
     {
       g_printerr ("Could not open %s\n.", data->filepath);
-      return NULL;
+      tuple.buffer = NULL;
+      return tuple;
     }
 
 
@@ -120,9 +129,9 @@ native do
     tuple.buffer = buffer;
     tuple.length = length;
 
-    ceu_sys_go(&CEU_APP, CEU_IN_LOAD_BUFFER_FINISHED, &tuple);
+    //ceu_sys_go(&CEU_APP, CEU_IN_LOAD_BUFFER_FINISHED, &tuple);
 
-    return NULL;
+    return tuple;
   }
 end
 
@@ -185,17 +194,13 @@ do
       _g_free (&&uristr!);
     end
 
-  var _SoupMessage &?msg;
+  var _id_buffer_tuple_t tuple = _id_buffer_tuple_t();
   if ($mp_data > 0) then
-    /* par/or do */ 
-    /*   async/thread (my_req_id, mp_data) do */ 
-    /*     _load_buffer (my_req_id, mp_data!); */
-    /*   end */
-    /* with */
-    /*   var int id; */
-    /*   var _gucharptr buff; */
-    /*   (id, buff) = await LOAD_BUFFER_FINISHED until (id == my_req_id); */ 
-    /* end */
+#if 1
+    async/thread (tuple, mp_data) do
+        tuple = _load_buffer (&&mp_data[0]);
+    end
+#else
     var _load_buffer_data_t&? arg;
       finalize
         arg = &_load_buffer_data_new (my_req_id, &&mp_data[0]);
@@ -215,12 +220,14 @@ do
     var _gsize length;
     (id, buff, length) = await LOAD_BUFFER_FINISHED 
                                                 until (id == my_req_id); 
+#endif
+  end
 
+  var _SoupMessage &?msg;
+  if ($mp_data > 0) then
     var _SoupBuffer &?soup_buffer;
       finalize
-        soup_buffer = &_soup_buffer_new_take (buff, length) 
-                          finalize with
-                          end;
+        soup_buffer = &_soup_buffer_new_take (tuple.buffer, tuple.length) ;
       with
         _soup_buffer_free (&&soup_buffer!);
       end
