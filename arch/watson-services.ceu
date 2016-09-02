@@ -59,18 +59,33 @@ do
     end;
   end
 
+  var bool logger = 
+#ifdef LOGGER
+    true;
+#else
+    false;
+#endif
+
   [[
-      resp = @response
-      decoded = json.decode (resp)
+     resp = @response
+     decoded = json.decode (resp)
+
+     if (@logger) then
+       print (resp)
+     end
 
      images = decoded.images
      classes = {}
      for i=1, #images do
-       classifiers = decoded.images[i].classifiers
-       for j=1, #classifiers do
-         for k=1, #classifiers[j].classes do
-           table.insert (classes, classifiers[j].classes[k])
+       if images[i].error == nil then
+         classifiers = images[i].classifiers
+         for j=1, #classifiers do
+           for k=1, #classifiers[j].classes do
+             table.insert (classes, classifiers[j].classes[k])
+           end
          end
+       else
+         print (images[i].error.description)
        end
      end
   ]]
